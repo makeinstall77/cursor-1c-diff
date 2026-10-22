@@ -1,0 +1,17 @@
+# Build output
+/dist/
+*.exe
+*.pdb
+*.obj
+
+# IDE / OS
+.vs/
+.idea/
+*.user
+*.suo
+Thumbs.db
+Desktop.ini
+
+# Local tooling
+*.log
+/tmp/
