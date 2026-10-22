@@ -31,5 +31,5 @@ pwsh -NoProfile -File .\build.ps1
 
 ## Репозиторий
 
-- Origin: [makeinstall/cursor-1c-diff](https://cursor.com/codebase/makeinstall/cursor-1c-diff)
-- Clone: `https://origin.cursor.com/makeinstall/cursor-1c-diff.git`
+- GitHub: [makeinstall77/cursor-1c-diff](https://github.com/makeinstall77/cursor-1c-diff) (remote `github`)
+- Origin (Cursor): [makeinstall/cursor-1c-diff](https://cursor.com/codebase/makeinstall/cursor-1c-diff) (remote `origin`)
