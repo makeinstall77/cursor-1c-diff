@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Cursor1cDiff
 {
@@ -9,9 +10,17 @@ namespace Cursor1cDiff
     /// Silent launcher for 1C Configurator external compare/merge via Cursor.
     /// - No console window (winexe)
     /// - Copies 1C .txt dumps to .bsl so BSL language mode / LS work
+    /// - For 2-file compare: reorder by 1C dump names (main config = right, storage version = left)
     /// </summary>
     internal static class Program
     {
+        // (Основная конфигурация) / (Конфигурация хранилища 1050)
+        private static readonly Regex StorageVersionRx = new Regex(
+            @"Конфигурация\s+хранилища\s+(\d+)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+        private const string MainConfigMarker = "Основная конфигурация";
+
         [STAThread]
         private static int Main(string[] args)
         {
@@ -38,8 +47,10 @@ namespace Cursor1cDiff
 
                 if (args.Length == 2)
                 {
-                    string left = CopyAsBsl(args[0], tmpDir, "left");
-                    string right = CopyAsBsl(args[1], tmpDir, "right");
+                    string leftSrc, rightSrc;
+                    OrderByOneCName(args[0], args[1], out leftSrc, out rightSrc);
+                    string left = CopyAsBsl(leftSrc, tmpDir, "left");
+                    string right = CopyAsBsl(rightSrc, tmpDir, "right");
                     return RunCursor(cursorExe, cliJs,
                         "--new-window", "--wait", "--diff", left, right);
                 }
@@ -83,6 +94,89 @@ namespace Cursor1cDiff
             {
                 Fatal(ex.Message);
                 return 1;
+            }
+        }
+
+        /// <summary>
+        /// 1C often swaps left/right depending on compare target (storage, EPF, …).
+        /// Prefer order from dump file names:
+        /// - «Основная конфигурация» → right
+        /// - «Конфигурация хранилища N» → left; if both have N → lower version left
+        /// </summary>
+        private static void OrderByOneCName(string a, string b, out string left, out string right)
+        {
+            FileRole roleA = ParseRole(a);
+            FileRole roleB = ParseRole(b);
+
+            if (roleA.StorageVersion.HasValue && roleB.StorageVersion.HasValue)
+            {
+                if (roleA.StorageVersion.Value <= roleB.StorageVersion.Value)
+                {
+                    left = a;
+                    right = b;
+                }
+                else
+                {
+                    left = b;
+                    right = a;
+                }
+                return;
+            }
+
+            if (roleA.IsMain && !roleB.IsMain)
+            {
+                left = b;
+                right = a;
+                return;
+            }
+            if (roleB.IsMain && !roleA.IsMain)
+            {
+                left = a;
+                right = b;
+                return;
+            }
+
+            if (roleA.StorageVersion.HasValue && !roleB.StorageVersion.HasValue)
+            {
+                left = a;
+                right = b;
+                return;
+            }
+            if (roleB.StorageVersion.HasValue && !roleA.StorageVersion.HasValue)
+            {
+                left = b;
+                right = a;
+                return;
+            }
+
+            left = a;
+            right = b;
+        }
+
+        private static FileRole ParseRole(string path)
+        {
+            string name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            bool isMain = name.IndexOf(MainConfigMarker, StringComparison.OrdinalIgnoreCase) >= 0;
+            int? version = null;
+            Match m = StorageVersionRx.Match(name);
+            if (m.Success)
+            {
+                int v;
+                if (int.TryParse(m.Groups[1].Value, out v))
+                    version = v;
+            }
+            return new FileRole(isMain, version);
+        }
+
+        private struct FileRole
+        {
+            public readonly bool IsMain;
+            public readonly int? StorageVersion;
+
+            public FileRole(bool isMain, int? storageVersion)
+            {
+                IsMain = isMain;
+                StorageVersion = storageVersion;
             }
         }
 
